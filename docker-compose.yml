@@ -14,11 +14,14 @@ x-sim: &sim
     # `docker compose down`). Set MAX_TICKS to a positive number for a bounded run.
     MAX_TICKS: "${MAX_TICKS:-0}"
     TICK_HZ: "${TICK_HZ:-12}"
-    # Hold generation one until a browser is watching, so the run is seen from the
-    # start instead of joined in progress. Off here on purpose: plain compose must
-    # still finish with nobody looking. VIEWER_TIMEOUT bounds the wait either way.
-    WAIT_FOR_VIEWER: "${WAIT_FOR_VIEWER:-0}"
-    VIEWER_TIMEOUT: "${VIEWER_TIMEOUT:-120}"
+    # "armed" seeds the islands, publishes them, and waits for somebody to press start
+    # in the interface and say how long the run should be — so the run is watched from
+    # generation one and nothing happens that the person did not ask for. "auto" starts
+    # immediately on MAX_TICKS instead. Either way, an armed island that sees no viewer
+    # within VIEWER_TIMEOUT gives up and runs headless, so output never depends on a
+    # browser arriving.
+    START_MODE: "${START_MODE:-armed}"
+    VIEWER_TIMEOUT: "${VIEWER_TIMEOUT:-180}"
   restart: "no"
 
 services:

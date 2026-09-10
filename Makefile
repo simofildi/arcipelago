@@ -16,19 +16,19 @@ EPOCHS ?= 2000
 # still stops the stack, and a bounded run still returns on its own.
 OPEN = @scripts/open_when_ready.sh http://localhost:8080 &
 
-# These three open a browser, so they can also make the islands wait for it: the run
-# is then watched from generation one instead of joined already in progress.
-up: ## Endless run, opens the interface, waits for it. Stops when you Ctrl-C
+# Two ways to decide how long a run lasts: in the interface, or on this command line.
+# `up` is the one to use — it hands the decision to whoever is watching.
+up: ## Seed the islands and open the interface. You choose the length and press start
 	$(OPEN)
-	WAIT_FOR_VIEWER=1 $(COMPOSE) up --build
+	$(COMPOSE) up --build
 
-run: ## Bounded run, opens the interface and waits for it: make run EPOCHS=2000
+run: ## Skip the gate and run straight away: make run EPOCHS=2000
 	$(OPEN)
-	WAIT_FOR_VIEWER=1 MAX_TICKS=$(EPOCHS) $(COMPOSE) up --build
+	START_MODE=auto MAX_TICKS=$(EPOCHS) $(COMPOSE) up --build
 
-fast: ## The shortest bounded run (300 generations, ~50 s), for a quick check
+fast: ## The shortest run (300 generations, ~50 s), for a quick check
 	$(OPEN)
-	WAIT_FOR_VIEWER=1 MAX_TICKS=300 LINGER_SECONDS=15 $(COMPOSE) up --build
+	START_MODE=auto MAX_TICKS=300 LINGER_SECONDS=15 $(COMPOSE) up --build
 
 verify: ## Check that the run produced output and the islands exchanged migrants
 	@test -s output/report.md || { echo "output/report.md missing or empty"; exit 1; }

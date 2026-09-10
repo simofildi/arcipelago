@@ -404,6 +404,38 @@
   .switch[aria-checked="true"] i { transform: translateX(16px); }
   .switch:focus-visible { outline-offset: 3px; border-radius: 999px; }
 
+  /* ---- the starting gate --------------------------------------------------
+     Centred over the sea rather than docked to a column: it is the only thing to
+     do on the page until it is done, and afterwards it never returns. */
+  .start {
+    left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 12;
+    width: min(430px, calc(100vw - 2 * var(--gutter)));
+    padding: 20px; display: grid; gap: 12px;
+  }
+  .start-name { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .start-note { margin: 0; color: var(--fg-muted); font-size: 12.5px; line-height: 1.5; }
+  .start-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+               flex-wrap: wrap; margin-top: 2px; }
+  .start-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; }
+  .lengths { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--recess); }
+  .lengths button {
+    padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+    font: 500 11.5px/1.5 var(--figures); font-variant-numeric: tabular-nums; color: var(--fg-muted);
+  }
+  .lengths button:hover { color: var(--fg); }
+  .lengths button[aria-checked="true"] {
+    background: var(--surface-solid); color: var(--fg); box-shadow: var(--shadow-knob);
+  }
+  /* The only filled control on the page, and graphite like every other piece of
+     chrome, so the sea keeps all the saturated pixels to itself. */
+  .go {
+    width: 100%; padding: 10px; border: 1px solid var(--control); border-radius: var(--r-sm);
+    background: var(--control); color: var(--control-fg);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: opacity .14s;
+  }
+  .go:hover { opacity: .88; }
+
   /* ---- buttons ------------------------------------------------------------ */
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
   .act, .ghost {

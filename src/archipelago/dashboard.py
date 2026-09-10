@@ -19,6 +19,9 @@ import redis
 ISLANDS = [s.strip() for s in os.environ.get("ISLANDS", "island-1,island-2,island-3").split(",") if s.strip()]
 PORT = int(os.environ.get("PORT", "8080"))
 LINGER = int(os.environ.get("LINGER_SECONDS", "180"))
+# Whether the islands are waiting to be started from here, which changes what the
+# terminal should tell the person to do. Read from the same variable the islands use.
+ARMED = os.environ.get("START_MODE", "armed").strip().lower() != "auto"
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 # Deliberately short: the page loads its own HTML, its stylesheet and its ES modules,
@@ -104,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/state":
             # A page asking for state is the earliest moment a viewer can receive
             # anything, so this is what releases islands started with
-            # WAIT_FOR_VIEWER: they hold generation one until this key appears.
+            # START_MODE=armed: they wait for a viewer before deciding nobody is coming.
             CLIENT.set("viewer:seen", "1")
             snapshots = []
             for island in ISLANDS:
@@ -113,7 +116,9 @@ class Handler(BaseHTTPRequestHandler):
                     snapshots.append(json.loads(raw))
             controls = {i: CLIENT.hgetall(f"control:{i}") for i in ISLANDS}
             finished = all(CLIENT.get(f"done:{i}") == "1" for i in ISLANDS)
-            self._json({"islands": snapshots, "controls": controls, "finished": finished})
+            started = CLIENT.get("run:go") is not None
+            self._json({"islands": snapshots, "controls": controls,
+                        "finished": finished, "started": started})
             return
 
         self._send(404, b"not found", "text/plain; charset=utf-8")
@@ -124,6 +129,20 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
             self._json({"error": "malformed request body"}, 400)
+            return
+
+        # Starting the run is the one command that belongs to the archipelago rather
+        # than to an island, so it is answered before the per-island check below.
+        if self.path == "/start":
+            try:
+                generations = max(0, int(payload.get("generations", 0)))
+            except (TypeError, ValueError):
+                self._json({"error": "generations must be a whole number"}, 400)
+                return
+            CLIENT.set("run:go", str(generations))
+            shape = "no ceiling" if generations == 0 else f"{generations} generations"
+            print(f"[dashboard] run started from the interface: {shape}", flush=True)
+            self._json({"ok": True, "generations": generations})
             return
 
         island = payload.get("island")
@@ -164,10 +183,27 @@ def main() -> int:
     CLIENT = connect()
     # A fresh stack has no viewer yet. Clearing it here rather than in the islands
     # keeps the gate owned by the one service that can actually observe a viewer.
-    CLIENT.delete("viewer:seen")
+    CLIENT.delete("viewer:seen", "run:go")
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     threading.Thread(target=watchdog, args=(server,), daemon=True).start()
-    print(f"[dashboard] open http://localhost:{PORT}", flush=True)
+    rule = "-" * 60
+    if ARMED:
+        lines = [rule,
+                 "  The archipelago is seeded and standing by.",
+                 "",
+                 f"  1. Open  http://localhost:{PORT}",
+                 "  2. Choose how many generations to run",
+                 "  3. Press Start",
+                 "",
+                 "  Nothing evolves until you do. Output is written as it runs.",
+                 rule]
+    else:
+        lines = [rule,
+                 "  The archipelago is running.",
+                 f"  Open  http://localhost:{PORT}  to watch and steer it.",
+                 rule]
+    for line in lines:
+        print(f"[dashboard] {line}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

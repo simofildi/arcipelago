@@ -11,6 +11,7 @@ import { readPalette } from "./palette.js";
 import { initTooltips } from "./tooltip.js";
 import { rebuild, paintIsland, launch, animate, setSelectHandler } from "./sea.js";
 import { drawRun, noteMark } from "./run.js";
+import { buildStart, showStart } from "./start.js";
 import { describeEvent, WINDOWS } from "./params.js";
 import { select, buildPanel, paintPanel, showDeck, paintDeck, openArchipelago,
          paintArchipelago, paintClock, paintPresetState, setLayoutHandler } from "./panel.js";
@@ -91,6 +92,17 @@ async function refresh() {
   paintDeck();
   paintArchipelago();
   paintPresetState();
+
+  // The gate belongs to the run, not to this browser: it is answered from the state
+  // every poll, so a reload mid-run does not offer to start what is already running.
+  const armed = data.started === false;
+  showStart(armed);
+  // "The run so far" has nothing to say before there is a run, and an empty chart is
+  // worse than no chart. It appears with the first generation.
+  if (timeline.hidden !== armed) {
+    timeline.hidden = armed;
+    relayout();
+  }
 
   paintClock(tick, data.finished, false);
 
@@ -191,6 +203,7 @@ sea.addEventListener("keydown", e => {
 
 readPalette();
 initTooltips();
+buildStart();
 setSelectHandler(select);
 setLayoutHandler(first => { syncInsets(); if (first) relayout(); });
 

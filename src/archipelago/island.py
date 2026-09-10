@@ -27,11 +27,15 @@ SEED = int(os.environ.get("SEED", "1"))
 MAX_TICKS = int(os.environ.get("MAX_TICKS", "0"))
 TICK_HZ = float(os.environ.get("TICK_HZ", "12"))
 
-# Hold generation one until somebody is actually watching. Off by default, because a
-# headless run must never wait for a browser that is not coming, and bounded even when
-# on, for the same reason.
-WAIT_FOR_VIEWER = os.environ.get("WAIT_FOR_VIEWER", "0").strip().lower() in {"1", "true", "yes", "on"}
-VIEWER_TIMEOUT = float(os.environ.get("VIEWER_TIMEOUT", "120"))
+# An armed island seeds its world, publishes it, and then waits to be started from the
+# interface, which is also where the person chooses how many generations to run. The
+# alternative is `START_MODE=auto`, which begins immediately on the env budget and is
+# what a headless run wants.
+ARMED = os.environ.get("START_MODE", "armed").strip().lower() != "auto"
+# How long an armed island waits before concluding that nobody is coming. It only
+# applies while no viewer has ever appeared: once somebody is watching, the island
+# waits as long as they need to choose, because a person is there to decide.
+VIEWER_TIMEOUT = float(os.environ.get("VIEWER_TIMEOUT", "180"))
 
 # `isolated` is a two-bit gate on this island's traffic, not a boolean, because
 # closing a strait is really two separate questions and a person watching the
@@ -113,29 +117,75 @@ def connect() -> redis.Redis:
     raise SystemExit(f"[{NAME}] redis unreachable at {host}")
 
 
-def wait_for_viewer(client: redis.Redis) -> None:
-    """Hold the first generation until the interface is open and asking for state.
+def publish(client: redis.Redis, world: World, events: deque, with_stats: bool = True) -> None:
+    """Put this island where the dashboard and the collector can read it.
 
-    Without this an island starts evolving the moment its container does, and by the
-    time a browser has finished loading the run is already hundreds of generations
-    old. The page can only chart what it sees, so that beginning is not late — it is
-    gone. The dashboard sets `viewer:seen` the first time a page asks it for state,
-    which is the earliest moment a viewer can actually receive anything.
-
-    It always gives up. `docker compose up` with nobody watching still has to produce
-    ./output, so nothing here may block a headless run indefinitely.
+    `with_stats` is off before the run begins: the collector writes one row per
+    generation and generation zero has not happened yet, so an armed island refreshes
+    its snapshot without inventing a row for it.
     """
-    if not WAIT_FOR_VIEWER:
-        return
-    print(f"[{NAME}] holding generation 1 for up to {VIEWER_TIMEOUT:.0f}s, "
-          f"waiting for the interface", flush=True)
+    snapshot = world.snapshot()
+    snapshot["events"] = list(events)
+    snapshot["controls"] = {key: world.params.get(key) for key in LIVE_KEYS}
+    snapshot["defaults"] = DEFAULTS
+    snapshot["neighbors"] = NEIGHBORS
+
+    pipe = client.pipeline()
+    pipe.set(f"state:{NAME}", json.dumps(snapshot), ex=60)
+    if with_stats:
+        pipe.rpush(f"stats:{NAME}", json.dumps(world.stats()))
+    pipe.execute()
+
+
+def wait_for_start(client: redis.Redis, refresh) -> int:
+    """Wait to be started from the interface, and return the generation budget chosen.
+
+    An island that begins evolving the moment its container does has already run for
+    hundreds of generations by the time a browser finishes loading, and the page can
+    only chart what it sees, so that beginning is not late — it is gone. Worse, the
+    person never chose it. Armed, the island seeds its world, publishes it so the
+    interface can draw the archipelago at rest, and waits for someone to press start
+    and say how long the run should be.
+
+    The wait is unbounded *only while somebody is watching*, because then a person is
+    there to decide and hurrying them is the whole thing this avoids. If no viewer has
+    appeared within VIEWER_TIMEOUT the island concludes nobody is coming and runs on
+    the environment's budget instead, so a headless `docker compose up` still produces
+    ./output with no browser involved.
+
+    Returns the ceiling in generations; 0 means no ceiling.
+    """
+    if not ARMED:
+        return MAX_TICKS
+    print(f"[{NAME}] ready and waiting to be started from the interface", flush=True)
     deadline = time.time() + VIEWER_TIMEOUT
-    while time.time() < deadline:
+    told = False
+    beats = 0
+    while True:
+        # `state:<island>` expires after 60 s and a person choosing a run length can
+        # easily take longer than that, so the snapshot is kept warm while we wait.
+        # Without this the interface would go back to "waiting for the islands" while
+        # the person is still looking at it.
+        beats += 1
+        if beats % 20 == 0:
+            refresh()
+        go = client.get("run:go")
+        if go is not None:
+            budget = max(0, int(go))
+            shape = "no ceiling" if budget <= 0 else f"{budget} generations"
+            print(f"[{NAME}] started from the interface: {shape}", flush=True)
+            return budget
         if client.get("viewer:seen") == "1":
-            print(f"[{NAME}] the interface is watching, starting now", flush=True)
-            return
+            if not told:
+                print(f"[{NAME}] somebody is watching; waiting for them to press start",
+                      flush=True)
+                told = True
+        elif time.time() > deadline:
+            shape = "no ceiling" if MAX_TICKS <= 0 else f"{MAX_TICKS} generations"
+            print(f"[{NAME}] nobody opened the interface within {VIEWER_TIMEOUT:.0f}s, "
+                  f"running headless: {shape}", flush=True)
+            return MAX_TICKS
         time.sleep(0.25)
-    print(f"[{NAME}] nobody opened the interface, starting anyway", flush=True)
 
 
 def apply_controls(client: redis.Redis, world: World) -> None:
@@ -232,11 +282,15 @@ def main() -> int:
     client.set(f"done:{NAME}", 0)
     recent_events: deque[dict] = deque()
     period = 1.0 / TICK_HZ if TICK_HZ > 0 else 0.0
-    budget = "unbounded (stop it yourself)" if MAX_TICKS <= 0 else f"{MAX_TICKS} ticks"
-    print(f"[{NAME}] starting: {budget}, neighbours={NEIGHBORS}, seed={SEED}", flush=True)
-    wait_for_viewer(client)
+    print(f"[{NAME}] seeded, neighbours={NEIGHBORS}, seed={SEED}", flush=True)
 
-    while MAX_TICKS <= 0 or world.tick < MAX_TICKS:
+    # Publish the world before it moves, so the interface can draw the archipelago at
+    # rest and the person can see what it is they are about to start.
+    keep_warm = lambda: publish(client, world, recent_events, with_stats=False)
+    keep_warm()
+    ceiling = wait_for_start(client, keep_warm)
+
+    while ceiling <= 0 or world.tick < ceiling:
         started = time.time()
         apply_controls(client, world)
         apply_commands(client, world)
@@ -259,16 +313,7 @@ def main() -> int:
         while recent_events and world.tick - recent_events[0]["tick"] > EVENT_TTL_TICKS:
             recent_events.popleft()
 
-        snapshot = world.snapshot()
-        snapshot["events"] = list(recent_events)
-        snapshot["controls"] = {key: world.params.get(key) for key in LIVE_KEYS}
-        snapshot["defaults"] = DEFAULTS
-        snapshot["neighbors"] = NEIGHBORS
-
-        pipe = client.pipeline()
-        pipe.set(f"state:{NAME}", json.dumps(snapshot), ex=60)
-        pipe.rpush(f"stats:{NAME}", json.dumps(world.stats()))
-        pipe.execute()
+        publish(client, world, recent_events)
 
         if world.tick % 250 == 0:
             s = world.stats()

@@ -47,37 +47,86 @@ dependency is the `redis` client.
 
 ## Build and run
 
-There are two ways to run it, and the only difference is whether it ever stops. Both build the
-image, start all six containers and open the web interface in your browser as soon as it answers.
-
 ```bash
 # from the project root
-
-# a fixed number of generations, then the stack shuts itself down
-make run EPOCHS=2000
-
-# or: no ceiling, evolves until you stop it with Ctrl-C
 make up
 ```
 
-**Start with `make run`.** It returns on its own, having written every output file, so there is
-nothing to remember to stop. `make fast` is the shortest version of it — 300 generations and a
-15-second linger, about 55 seconds from `make fast` to your shell prompt — for a quick check.
+That builds the image, starts all six containers and opens the interface. **Nothing evolves yet.**
+The islands seed their worlds, publish them so you can see the archipelago at rest, and wait. The
+terminal tells you the same thing:
 
-A container cannot open a browser on the host, so the `make` targets do it host-side: a small
-watcher (`scripts/open_when_ready.sh`) polls the dashboard in the background and opens
-<http://localhost:8080> the moment it responds, giving up quietly if the stack never comes up.
-Compose itself is untouched by this — Ctrl-C still stops everything, and a bounded run still
-returns by itself.
+```
+[dashboard] ------------------------------------------------------------
+[dashboard]   The archipelago is seeded and standing by.
+[dashboard]
+[dashboard]   1. Open  http://localhost:8080
+[dashboard]   2. Choose how many generations to run
+[dashboard]   3. Press Start
+[dashboard]
+[dashboard]   Nothing evolves until you do. Output is written as it runs.
+[dashboard] ------------------------------------------------------------
+```
 
-Plain compose works identically if you would rather not use `make`; you just open the page
-yourself:
+In the interface you pick a length — **400**, **600**, **1,000** generations or **no limit** — and
+press *Start the run*. The islands begin together at generation one, so the charts show the whole
+run rather than joining one already in progress, and when the ceiling is reached the stack writes
+its files and shuts itself down on its own.
+
+This is the point of the gate: nothing happens that you did not ask for, and you see the archipelago
+before it moves rather than several hundred generations into it.
+
+Plain compose behaves the same way, since the wait is the default — you just open the page yourself:
 
 ```bash
-MAX_TICKS=2000 docker compose up --build     # bounded, stops on its own
-docker compose up --build                    # endless, Ctrl-C to stop
-open http://localhost:8080                   # macOS (xdg-open on Linux)
+docker compose up --build
+open http://localhost:8080          # macOS (xdg-open on Linux)
 ```
+
+**A container cannot open a browser on the host**, which is why the `make` targets do it from the
+host side: `scripts/open_when_ready.sh` polls the dashboard in the background and opens
+<http://localhost:8080> the moment it answers. Compose itself is untouched — Ctrl-C still stops
+everything, and a bounded run still returns by itself.
+
+### Skipping the gate
+
+If you already know how long you want and would rather not click anything:
+
+```bash
+make run EPOCHS=2000     # starts immediately, no waiting
+make fast                # 300 generations, about 55 seconds end to end
+```
+
+Both set `START_MODE=auto`, which is also what you want for an unattended or scripted run.
+
+### It never waits forever
+
+An armed island that has seen **no viewer at all** within `VIEWER_TIMEOUT` seconds concludes that
+nobody is coming, logs `nobody opened the interface, running headless`, and runs on `MAX_TICKS`
+instead. Verified by starting the stack with no dashboard service at all: the islands wait, give up,
+and write the same five output files. Once somebody *is* watching, the wait becomes unbounded on
+purpose — a person is there to decide, and hurrying them is exactly what this avoids.
+
+### Options
+
+| Variable         | Default  | What it does                                                          |
+| ---------------- | -------: | --------------------------------------------------------------------- |
+| `START_MODE`     | `armed`  | `armed` waits to be started from the interface; `auto` begins at once  |
+| `EPOCHS`         |   `2000` | Generations for `make run`. One epoch is one generation                |
+| `MAX_TICKS`      |      `0` | The ceiling for `auto`, and the fallback if nobody opens the interface |
+| `VIEWER_TIMEOUT` |    `180` | How long an armed island waits for a viewer before running headless    |
+| `TICK_HZ`        |     `12` | Generations per second each island aims for                            |
+| `LINGER_SECONDS` |    `120` | How long the dashboard stays up *after* a bounded run, so you can look |
+
+`LINGER_SECONDS` is why a 400-generation run takes about three minutes rather than thirty seconds:
+the simulation is over quickly and the rest is the interface waiting for you. Pass
+`LINGER_SECONDS=15` for a run that packs up promptly.
+
+With a ceiling the stack shuts itself down in order: the islands stop at that generation, the
+collector writes the files and stops, the dashboard serves for another `LINGER_SECONDS`, and redis
+— which has no reason of its own to stop — drains last, so the command returns with every service
+at exit code 0. Choose *No limit* and nothing ever declares itself done: that run keeps going until
+you stop it with Ctrl-C.
 
 Stop and clean up:
 
@@ -85,42 +134,6 @@ Stop and clean up:
 make down          # stop the stack, keep the output files
 make clean         # stop it and delete the generated output too
 ```
-
-### Options
-
-| Variable         | Default | What it does                                                            |
-| ---------------- | ------: | ----------------------------------------------------------------------- |
-| `EPOCHS`         |  `2000` | Generations for `make run`. One epoch is one generation                  |
-| `MAX_TICKS`      |     `0` | The same ceiling for plain compose. `0` means no ceiling                 |
-| `TICK_HZ`        |    `12` | Generations per second each island aims for                              |
-| `LINGER_SECONDS` |   `120` | How long the dashboard stays up *after* a bounded run, so you can look   |
-| `WAIT_FOR_VIEWER`|     `0` | Hold generation one until the interface is open. The `make` targets set it |
-| `VIEWER_TIMEOUT` |   `120` | How long that hold lasts before the islands start anyway                 |
-
-**Watching the run from generation one.** Containers start evolving the instant they come up, so by
-the time a browser has finished loading the run is already hundreds of generations old — and the
-interface can only chart what it sees, so that beginning is not late, it is gone. Set
-`WAIT_FOR_VIEWER=1` and the islands hold generation one until a page actually asks the dashboard
-for state:
-
-```bash
-WAIT_FOR_VIEWER=1 docker compose up --build
-```
-
-The `make` targets set it for you, since they open the browser anyway. It always gives up after
-`VIEWER_TIMEOUT` seconds and runs regardless, so it can never hang a run that nobody is watching —
-with no dashboard started at all, the islands wait, log `nobody opened the interface, starting
-anyway`, and write the same output as always.
-
-`LINGER_SECONDS` is why `make run EPOCHS=400` takes about three minutes rather than thirty seconds:
-the simulation is over quickly and the rest is the interface waiting for you. Pass
-`LINGER_SECONDS=15` for a run that packs up promptly.
-
-With a ceiling the stack shuts itself down in order: the islands stop at that generation, the
-collector writes the files and stops, the dashboard serves for another `LINGER_SECONDS`, and redis
-— which has no reason of its own to stop — drains last, so the command returns with every service
-at exit code 0. With no ceiling nothing ever declares itself done, and that run will not return by
-itself.
 
 ## Verification
 
@@ -188,7 +201,11 @@ small and the output stays diffable text.
 
 ## The web interface
 
-<http://localhost:8080> while the stack is up. The sea fills the viewport: each island is a live
+<http://localhost:8080> while the stack is up. On a fresh stack it opens on the starting gate: the
+three islands drawn at rest, and one card asking how long the run should be. Once you press start
+it is out of the way for good.
+
+After that, the sea fills the viewport: each island is a live
 raster of its own grid — green is grass, ochre dots are prey, rust dots are predators, and a dot
 ringed in blue is an individual that crossed the water. Marks moving between islands are real
 migrations happening at that moment. A card per island on the right opens its parameters; a run
@@ -212,9 +229,19 @@ island replayed alone is exact; it is the crossing between containers that is no
 
 ## Troubleshooting
 
-**`docker compose up` does not return.** That run has no generation ceiling, which is the default
-for plain compose. Use `make run EPOCHS=2000`, or `MAX_TICKS=2000 docker compose up --build`, for a
-run that ends by itself. Ctrl-C, or `make down` from another terminal, stops an endless one.
+**`docker compose up` does not return.** Either you chose *No limit* when you started the run, or
+nobody ever opened the interface and the islands fell back to `MAX_TICKS`, which defaults to no
+ceiling. Pick one of the numbered lengths instead, or pass `MAX_TICKS=2000`. Ctrl-C, or `make down`
+from another terminal, stops an endless run at any time.
+
+**Nothing is happening and the interface says "Ready when you are".** That is the design: the
+islands are seeded and waiting for you to choose a length and press *Start the run*. If you would
+rather skip the gate entirely, use `make run EPOCHS=2000` or set `START_MODE=auto`.
+
+**The run started on its own, without me pressing anything.** Two ways that happens. A browser tab
+left open on the dashboard from an earlier run keeps polling and counts as a viewer, which is
+correct but easy to forget — close stale tabs. Or nobody opened the interface within
+`VIEWER_TIMEOUT` seconds and the islands ran headless rather than wait forever.
 
 **`./output` is empty.** The collector writes every 20 records (`FLUSH_EVERY`), so give it a few
 seconds after start.

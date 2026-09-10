@@ -158,6 +158,20 @@ export function straitLabel(value) {
    legible while a run heads into five figures; "All" starts at generation one and
    fits the whole thing, which is what you want after a restart or when comparing the
    beginning of a run with where it ended up. */
+/* How long a run lasts, offered before it starts. Presets rather than a free number
+   because the question is "long enough to see what?", not "how many", and the answers
+   are the three shapes worth watching: one cycle, a few, and a long settling. */
+export const RUN_LENGTHS = [
+  { id: "400", label: "400", generations: 400,
+    help: "About 35 seconds. Long enough for the first predator-prey cycle to turn and for the first migrants to land, and short enough to run several times over while you change the parameters." },
+  { id: "600", label: "600", generations: 600, preselected: true,
+    help: "About a minute. Two or three cycles, enough for the islands to start drifting apart from each other and for selection to move the traits visibly." },
+  { id: "1000", label: "1,000", generations: 1000,
+    help: "Under two minutes. Long enough that a population can crash and be rescued by immigration from a neighbour, which is the phenomenon the archipelago exists to show." },
+  { id: "open", label: "No limit", generations: 0,
+    help: "Runs until you stop it, with no ceiling at all. The output files are written as it goes, so you can leave it evolving for as long as you like and stop it with Ctrl-C in the terminal." }
+];
+
 export const WINDOWS = [
   { id: "300", label: "300", span: 300, help: "The last 300 generations. Close enough to watch a single predator-prey cycle turn." },
   { id: "600", label: "600", span: 600, help: "The last 600 generations \u2014 a few cycles, still detailed." },
