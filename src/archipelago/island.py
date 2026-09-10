@@ -27,6 +27,12 @@ SEED = int(os.environ.get("SEED", "1"))
 MAX_TICKS = int(os.environ.get("MAX_TICKS", "0"))
 TICK_HZ = float(os.environ.get("TICK_HZ", "12"))
 
+# Hold generation one until somebody is actually watching. Off by default, because a
+# headless run must never wait for a browser that is not coming, and bounded even when
+# on, for the same reason.
+WAIT_FOR_VIEWER = os.environ.get("WAIT_FOR_VIEWER", "0").strip().lower() in {"1", "true", "yes", "on"}
+VIEWER_TIMEOUT = float(os.environ.get("VIEWER_TIMEOUT", "120"))
+
 # `isolated` is a two-bit gate on this island's traffic, not a boolean, because
 # closing a strait is really two separate questions and a person watching the
 # archipelago will want to ask them one at a time: what happens to this island if it
@@ -105,6 +111,31 @@ def connect() -> redis.Redis:
         except redis.exceptions.ConnectionError:
             time.sleep(1)
     raise SystemExit(f"[{NAME}] redis unreachable at {host}")
+
+
+def wait_for_viewer(client: redis.Redis) -> None:
+    """Hold the first generation until the interface is open and asking for state.
+
+    Without this an island starts evolving the moment its container does, and by the
+    time a browser has finished loading the run is already hundreds of generations
+    old. The page can only chart what it sees, so that beginning is not late — it is
+    gone. The dashboard sets `viewer:seen` the first time a page asks it for state,
+    which is the earliest moment a viewer can actually receive anything.
+
+    It always gives up. `docker compose up` with nobody watching still has to produce
+    ./output, so nothing here may block a headless run indefinitely.
+    """
+    if not WAIT_FOR_VIEWER:
+        return
+    print(f"[{NAME}] holding generation 1 for up to {VIEWER_TIMEOUT:.0f}s, "
+          f"waiting for the interface", flush=True)
+    deadline = time.time() + VIEWER_TIMEOUT
+    while time.time() < deadline:
+        if client.get("viewer:seen") == "1":
+            print(f"[{NAME}] the interface is watching, starting now", flush=True)
+            return
+        time.sleep(0.25)
+    print(f"[{NAME}] nobody opened the interface, starting anyway", flush=True)
 
 
 def apply_controls(client: redis.Redis, world: World) -> None:
@@ -203,6 +234,7 @@ def main() -> int:
     period = 1.0 / TICK_HZ if TICK_HZ > 0 else 0.0
     budget = "unbounded (stop it yourself)" if MAX_TICKS <= 0 else f"{MAX_TICKS} ticks"
     print(f"[{NAME}] starting: {budget}, neighbours={NEIGHBORS}, seed={SEED}", flush=True)
+    wait_for_viewer(client)
 
     while MAX_TICKS <= 0 or world.tick < MAX_TICKS:
         started = time.time()

@@ -102,6 +102,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/state":
+            # A page asking for state is the earliest moment a viewer can receive
+            # anything, so this is what releases islands started with
+            # WAIT_FOR_VIEWER: they hold generation one until this key appears.
+            CLIENT.set("viewer:seen", "1")
             snapshots = []
             for island in ISLANDS:
                 raw = CLIENT.get(f"state:{island}")
@@ -158,6 +162,9 @@ def watchdog(server: ThreadingHTTPServer) -> None:
 def main() -> int:
     global CLIENT
     CLIENT = connect()
+    # A fresh stack has no viewer yet. Clearing it here rather than in the islands
+    # keeps the gate owned by the one service that can actually observe a viewer.
+    CLIENT.delete("viewer:seen")
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     threading.Thread(target=watchdog, args=(server,), daemon=True).start()
     print(f"[dashboard] open http://localhost:{PORT}", flush=True)

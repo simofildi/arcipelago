@@ -94,6 +94,23 @@ make clean         # stop it and delete the generated output too
 | `MAX_TICKS`      |     `0` | The same ceiling for plain compose. `0` means no ceiling                 |
 | `TICK_HZ`        |    `12` | Generations per second each island aims for                              |
 | `LINGER_SECONDS` |   `120` | How long the dashboard stays up *after* a bounded run, so you can look   |
+| `WAIT_FOR_VIEWER`|     `0` | Hold generation one until the interface is open. The `make` targets set it |
+| `VIEWER_TIMEOUT` |   `120` | How long that hold lasts before the islands start anyway                 |
+
+**Watching the run from generation one.** Containers start evolving the instant they come up, so by
+the time a browser has finished loading the run is already hundreds of generations old — and the
+interface can only chart what it sees, so that beginning is not late, it is gone. Set
+`WAIT_FOR_VIEWER=1` and the islands hold generation one until a page actually asks the dashboard
+for state:
+
+```bash
+WAIT_FOR_VIEWER=1 docker compose up --build
+```
+
+The `make` targets set it for you, since they open the browser anyway. It always gives up after
+`VIEWER_TIMEOUT` seconds and runs regardless, so it can never hang a run that nobody is watching —
+with no dashboard started at all, the islands wait, log `nobody opened the interface, starting
+anyway`, and write the same output as always.
 
 `LINGER_SECONDS` is why `make run EPOCHS=400` takes about three minutes rather than thirty seconds:
 the simulation is over quickly and the rest is the interface waiting for you. Pass
