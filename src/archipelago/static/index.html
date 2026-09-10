@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Archipelago</title>
+<link rel="stylesheet" href="app.css">
+<!-- Native ES modules: no bundler, no npm, no network. The browser resolves the
+     imports itself, so the graded build has no JavaScript toolchain in it at all. -->
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<div class="sea" id="sea" aria-label="The archipelago and the crossings between islands">
+  <canvas id="routes" aria-hidden="true"></canvas>
+  <p class="waiting" id="waiting">Waiting for the islands to publish their first generation.</p>
+</div>
+
+<div class="deck" id="deck" aria-label="The archipelago and its islands"></div>
+
+<aside class="float panel" id="panel" hidden aria-label="Archipelago panel">
+  <div class="panel-top" id="panel-top"></div>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
+
+<footer class="float timeline" id="timeline">
+  <div class="timeline-top">
+    <span class="timeline-name">The run so far</span>
+    <button class="info" type="button" data-tip-title="The run so far"
+      data-tip="One band per island, all on one shared scale, so height means the same thing everywhere: higher is more individuals, whichever species and whichever island. The ceiling on the left is the largest population anywhere in the window on screen. The figures on the right are the latest sample. Vertical ticks mark the moment you intervened, so a drought or a closed strait can be lined up against what happened next. The bands share one generation axis and do not all fill it: each island is a separate container keeping its own clock, and a generation that overran its budget is never made up, so they drift apart by tens of generations over a long run. A band therefore runs from where that island was when you opened this page to the generation it has reached now, which is why one can sit to the left and another to the right. Both edges are real. The offset does not shrink, but it stops being most of the picture once the page has watched for a while.">i</button>
+    <span class="run-key">
+      <span class="key-item"><i class="key-swatch key-prey"></i>prey</span>
+      <span class="key-item"><i class="key-swatch key-pred"></i>predators</span>
+      <span class="key-item"><i class="key-swatch key-mark"></i>intervention</span>
+    </span>
+    <span class="run-window" id="run-window" role="radiogroup" aria-label="How much of the run to show"></span>
+    <span class="timeline-span" id="run-span"></span>
+    <button class="chevron" id="strip-toggle" type="button" aria-label="Collapse the run strip" aria-expanded="true">
+      <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden="true">
+        <path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+  <canvas id="run"></canvas>
+</footer>
+
+<div id="tip" role="tooltip"></div></body>
+</html>

@@ -1,0 +1,103 @@
+name: arcipelago
+
+x-sim: &sim
+  build:
+    context: .
+  image: arcipelago:latest
+  depends_on:
+    redis:
+      condition: service_healthy
+  environment: &sim-env
+    REDIS_HOST: redis
+    ISLANDS: island-1,island-2,island-3
+    # 0 = no generation ceiling: the stack runs until you stop it (Ctrl-C or
+    # `docker compose down`). Set MAX_TICKS to a positive number for a bounded run.
+    MAX_TICKS: "${MAX_TICKS:-0}"
+    TICK_HZ: "${TICK_HZ:-12}"
+  restart: "no"
+
+services:
+  # The sea: the only channel between the islands. It outlives the islands but not
+  # the run - once the collector has written its files and the dashboard has had its
+  # linger window, redis stops too, so `docker compose up` returns on its own instead
+  # of hanging on a service that would otherwise never exit.
+  redis:
+    image: redis:7-alpine
+    environment:
+      LINGER_SECONDS: "${LINGER_SECONDS:-120}"
+    command:
+      - sh
+      - -ec
+      - |
+        redis-server --save "" --appendonly no --daemonize yes
+        until [ "$$(redis-cli ping 2>/dev/null)" = "PONG" ]; do sleep 1; done
+        until [ "$$(redis-cli get done:collector)" = "1" ]; do sleep 2; done
+        sleep $$((LINGER_SECONDS + 5))
+        redis-cli shutdown nosave 2>/dev/null || true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Lush grassland, ineffective predators: prey thrive and grow slow.
+  island-1:
+    <<: *sim
+    command: ["python", "-m", "archipelago.island"]
+    environment:
+      <<: *sim-env
+      ISLAND_NAME: island-1
+      SEED: "11"
+      GRASS_RATE: "0.065"
+      LETHALITY: "0.8"
+      MUTATION: "0.04"
+      MIGRANTS_PER_WAVE: "6"
+
+  # Thin soil and ruthless hunting: brutal selection on camouflage.
+  island-2:
+    <<: *sim
+    command: ["python", "-m", "archipelago.island"]
+    environment:
+      <<: *sim-env
+      ISLAND_NAME: island-2
+      SEED: "23"
+      GRASS_RATE: "0.035"
+      LETHALITY: "1.3"
+      MUTATION: "0.04"
+      MIGRANTS_PER_WAVE: "6"
+
+  # Average climate but high mutation: genetic novelty starts here and travels.
+  island-3:
+    <<: *sim
+    command: ["python", "-m", "archipelago.island"]
+    environment:
+      <<: *sim-env
+      ISLAND_NAME: island-3
+      SEED: "37"
+      GRASS_RATE: "0.05"
+      LETHALITY: "1.0"
+      MUTATION: "0.10"
+      MIGRANTS_PER_WAVE: "6"
+
+  # Listens to the three islands and writes the output files to the shared volume.
+  collector:
+    <<: *sim
+    command: ["python", "-m", "archipelago.collector"]
+    environment:
+      <<: *sim-env
+      OUTPUT_DIR: /app/output
+    volumes:
+      - ./output:/app/output
+
+  # Graphical interface: http://localhost:8080
+  dashboard:
+    <<: *sim
+    command: ["python", "-m", "archipelago.dashboard"]
+    environment:
+      <<: *sim-env
+      PORT: "8080"
+      LINGER_SECONDS: "${LINGER_SECONDS:-120}"
+    volumes:
+      - ./output:/app/output
+    ports:
+      - "8080:8080"

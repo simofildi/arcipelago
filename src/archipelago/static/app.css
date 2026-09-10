@@ -1,0 +1,520 @@
+  /* Two rules govern this interface.
+
+     One: the chrome floats, the data does not. Every control lives on a translucent
+     panel that hovers over the sea, so the islands are never boxed in or cropped by
+     a sidebar — the simulation is the page, the instruments sit on top of it.
+
+     Two: colour is still data. The chassis is graphite and neutral grey, exactly as
+     shadcn ships it, and the only saturated pixels on screen are ochre prey, rust
+     predators and the blue of anything that crossed the water. Interactive chrome —
+     switches, slider fills, focus rings — is graphite, never a fourth colour, so a
+     slider can never be mistaken for a measurement. */
+  :root {
+    color-scheme: light;
+
+    --bg:            #f4f4f5;
+    --bg-deep:       #e8e8eb;
+    --surface:       rgba(255, 255, 255, 0.78);
+    --surface-solid: #ffffff;
+    --raised:        rgba(255, 255, 255, 0.62);
+    --hairline:      rgba(9, 9, 11, 0.09);
+    --hairline-firm: rgba(9, 9, 11, 0.15);
+    --fg:            #09090b;
+    --fg-muted:      #52525b;
+    --fg-faint:      #8b8b94;
+    --control:       #18181b;
+    --control-fg:    #fafafa;
+    --track:         rgba(9, 9, 11, 0.13);
+    --hover:         rgba(9, 9, 11, 0.045);
+    --shadow-panel:  0 1px 3px rgba(9,9,11,.05);
+    --shadow-knob:   0 1px 2px rgba(9,9,11,.16);
+    --shadow-tip:    0 4px 14px -4px rgba(9,9,11,.14);
+
+    --prey:      #a06a06;
+    --pred:      #b23018;
+    /* Text and the thin gene bars need contrast against a white card, while a 2 px
+       line on a grey band needs saturation. One token each, so neither compromises
+       for the other. */
+    --prey-line: #e8a000;
+    --pred-line: #e03726;
+    --cross:     #1d3fbe;
+    --cross-lit: #7fb2ff;
+    --recess:    rgba(9, 9, 11, 0.055);
+
+    --r-lg: 18px;
+    --r-md: 11px;
+    --r-sm: 8px;
+
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    --figures: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    --panel-w: 372px;
+    --gutter: 18px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+
+      --bg:            #0b0b0d;
+      --bg-deep:       #141417;
+      --surface:       rgba(26, 26, 30, 0.76);
+      --surface-solid: #1a1a1e;
+      --raised:        rgba(255, 255, 255, 0.05);
+      --hairline:      rgba(255, 255, 255, 0.10);
+      --hairline-firm: rgba(255, 255, 255, 0.18);
+      --fg:            #fafafa;
+      --fg-muted:      #a1a1aa;
+      --fg-faint:      #71717a;
+      --control:       #fafafa;
+      --control-fg:    #18181b;
+      --track:         rgba(255, 255, 255, 0.15);
+      --hover:         rgba(255, 255, 255, 0.06);
+      --shadow-panel:  0 1px 3px rgba(0,0,0,.35);
+      --shadow-knob:   0 1px 2px rgba(0,0,0,.45);
+      --shadow-tip:    0 4px 14px -4px rgba(0,0,0,.5);
+
+      --prey:      #e0a94a;
+      --pred:      #ef6a4d;
+      --prey-line: #ffc247;
+      --pred-line: #ff6a4e;
+      --cross:     #7fb2ff;
+      --cross-lit: #a8ccff;
+      --recess:    rgba(255, 255, 255, 0.06);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 90% at 50% 0%, var(--bg) 0%, var(--bg-deep) 100%) fixed;
+    color: var(--fg);
+    font: 400 13px/1.5 var(--sans);
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button, input { font: inherit; letter-spacing: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--control); outline-offset: 2px; border-radius: 4px; }
+
+  /* ---- the sea: the whole viewport, with the panels floating over it ------- */
+  .sea { position: fixed; inset: 0; overflow: hidden; }
+  #routes { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+
+  .isle {
+    position: absolute; z-index: 2; transform: translate(-50%, -50%);
+    display: block; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* The raster itself is untouched — same pixels, same palette. Only its frame is
+     new: a rounded clip and a hairline ring, so it reads as an object on the sea. */
+  .isle canvas {
+    display: block; background: #0d1c18;
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px var(--hairline);
+    transition: box-shadow .16s ease;
+  }
+  .isle[aria-pressed="true"] canvas { box-shadow: 0 0 0 2px var(--control); }
+  .isle[aria-pressed="false"]:hover canvas { box-shadow: 0 0 0 1px var(--fg-faint); }
+
+  /* The counts used to be pushed to the far edge of a wide raster, which left the
+     name stranded at one end of a long empty line. Keeping them next to the name
+     makes the whole label read as one object. */
+  .isle { display: flex; flex-direction: column; }
+  .isle.label-above { flex-direction: column-reverse; }
+  .isle-label { display: block; margin-top: 9px; }
+  .isle.label-above .isle-label { margin-top: 0; margin-bottom: 9px; }
+  .isle-head { display: flex; align-items: baseline; gap: 3px 10px; flex-wrap: wrap; }
+  .isle-name { font-size: 14px; font-weight: 640; letter-spacing: -0.018em; white-space: nowrap; }
+  /* A closed strait is a fact about the island, so it is written on the island
+     rather than appended to its name, where it used to push the counts around and
+     read as part of the title. */
+  .isle-raster { position: relative; display: block; }
+  .isle-badge {
+    position: absolute; top: 7px; left: 7px;
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px;
+    background: rgba(12, 14, 13, 0.72);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: #f3f3f0; font-size: 10.5px; font-weight: 500; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
+  .isle-badge::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #ffb02e; }
+  .isle-badge[hidden] { display: none; }
+  .isle-counts { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11.5px; color: var(--fg-muted); }
+  .isle-counts span { white-space: nowrap; }
+  .isle-counts b { font: 500 12px/1 var(--figures); font-variant-numeric: tabular-nums; }
+  .c-prey { color: var(--prey); }
+  .c-pred { color: var(--pred); }
+  .isle-biome { margin: 2px 0 0; color: var(--fg-faint); font-size: 11.5px; line-height: 1.35; }
+
+  /* ---- floating shell ----------------------------------------------------- */
+  .float {
+    position: fixed; z-index: 10;
+    background: var(--surface);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* ---- the deck: the resting state -----------------------------------------
+     Not one panel with cards inside it. Four separate surfaces floating over the
+     sea — the archipelago, then one per island — each its own object you can click.
+     The generation counter lives on the archipelago card, because it belongs to the
+     archipelago and not to a strip of chrome across the top of the screen. */
+  /* Height follows the content, capped at the window. A column that is always
+     full height is a box of empty space with four cards at the top of it. */
+  .deck {
+    position: fixed; z-index: 10;
+    top: var(--gutter); right: var(--gutter);
+    width: var(--panel-w);
+    max-height: calc(100vh - var(--gutter) * 2);
+    display: flex; flex-direction: column; gap: 8px;
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+  .deck[hidden] { display: none; }
+  .deck::-webkit-scrollbar { width: 0; }
+
+  .deck-card {
+    display: block; width: 100%; text-align: left; cursor: pointer; flex: none;
+    padding: 14px 16px 15px;
+    background: var(--surface);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    backdrop-filter: saturate(180%) blur(22px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-panel);
+    transition: border-color .14s ease, background .14s ease;
+  }
+  .deck-card:hover { border-color: var(--hairline-firm); background: var(--surface-solid); }
+
+  .deck-top { display: flex; align-items: baseline; gap: 9px; }
+  .deck-name { font-size: 16px; font-weight: 640; letter-spacing: -0.022em; white-space: nowrap; }
+  .deck-arch .deck-name { font-size: 18px; }
+  .deck-clock {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 999px;
+    background: var(--raised); border: 1px solid var(--hairline); white-space: nowrap;
+  }
+  .deck-dot { width: 6px; height: 6px; border-radius: 50%; background: #2f9e5e; flex: none; }
+  .deck-clock.is-stopped .deck-dot { background: var(--fg-faint); }
+  .deck-clock.is-lost .deck-dot { background: var(--pred); }
+  .deck-gen { font: 500 12.5px/1 var(--figures); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .deck-genlabel { font-size: 10.5px; color: var(--fg-muted); }
+  .deck-go { margin-left: auto; font-size: 11px; color: var(--fg-faint); white-space: nowrap; }
+  .deck-sub { margin: 4px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--fg-muted); }
+  .deck-flag {
+    font-size: 10px; font-weight: 500; color: var(--fg-muted);
+    background: var(--raised); border: 1px solid var(--hairline);
+    padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .deck-figs { display: flex; gap: 16px; margin-top: 11px; }
+  .deck-figs span { font-size: 10.5px; color: var(--fg-muted); white-space: nowrap; }
+  .deck-figs b { display: block; font: 500 17px/1.2 var(--figures); font-variant-numeric: tabular-nums; letter-spacing: -0.028em; }
+  .deck-arch .deck-figs b { font-size: 20px; }
+
+  /* ---- the panel ---------------------------------------------------------- */
+  .panel {
+    top: var(--gutter); right: var(--gutter);
+    width: var(--panel-w);
+    max-height: calc(100vh - var(--gutter) * 2);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel[hidden] { display: none; }
+  .panel-top { padding: 13px 18px 12px; border-bottom: 1px solid var(--hairline); }
+  .panel-title { display: flex; align-items: center; gap: 9px; }
+  .panel-name { margin: 0; font-size: 17px; font-weight: 640; letter-spacing: -0.024em; }
+  .panel-back {
+    flex: none; margin-left: -6px; width: 26px; height: 26px; padding: 0;
+    display: grid; place-items: center; cursor: pointer;
+    border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted);
+  }
+  .panel-back:hover { background: var(--hover); color: var(--fg); }
+  .panel-biome { margin: 3px 0 0; color: var(--fg-muted); font-size: 12px; }
+
+  .tally { display: flex; gap: 7px; margin: 12px 0 0; }
+  .tally-cell {
+    flex: 1; padding: 7px 9px 8px;
+    background: var(--raised); border: 1px solid var(--hairline); border-radius: var(--r-md);
+  }
+  .tally-cell b { display: block; font: 500 17px/1.15 var(--figures); font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+  .tally-cell span { font-size: 11px; color: var(--fg-muted); }
+  .fig-prey { color: var(--prey); }
+  .fig-pred { color: var(--pred); }
+  .fig-cross { color: var(--cross); }
+
+  .panel-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 18px 16px; }
+  .panel-body::-webkit-scrollbar { width: 9px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--track); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+
+  .group { border-top: 1px solid var(--hairline); }
+  .group:first-child { border-top: 0; }
+  .group-head { display: flex; align-items: center; gap: 6px; padding: 11px 0; }
+  .group-name { font-size: 12px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .group-note { margin-left: auto; flex: none; font-size: 10.5px; color: var(--fg-faint); white-space: nowrap; }
+  /* The head is a disclosure control, so the whole row is the hit area — except the
+     info button sitting inside it, which has its own job. */
+  .group-toggle {
+    flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+    padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer;
+  }
+  .group-toggle:focus-visible { outline-offset: 4px; }
+  .group-caret { flex: none; color: var(--fg-faint); transition: transform .2s ease; }
+  .group[data-open="true"] .group-caret { transform: rotate(90deg); }
+  .group-body { padding-bottom: 12px; }
+  .group[data-open="false"] .group-body { display: none; }
+  .group[data-open="false"] .group-head { padding-bottom: 11px; }
+
+  /* ---- presets ------------------------------------------------------------ */
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .preset {
+    display: block; padding: 9px 10px; text-align: left; cursor: pointer;
+    border: 1px solid var(--hairline-firm); border-radius: var(--r-md);
+    background: var(--raised);
+    transition: background .14s, border-color .14s;
+  }
+  .preset:hover { background: var(--hover); border-color: var(--fg-faint); }
+  .preset[aria-pressed="true"] { background: var(--control); border-color: var(--control); color: var(--control-fg); }
+  .preset[aria-pressed="true"] .preset-note { color: inherit; opacity: .7; }
+  .preset-name { display: block; font-size: 12px; font-weight: 550; line-height: 1.3; }
+  /* The strait is a radio group, so its selected state is aria-checked rather than
+     aria-pressed; the look is the same because the meaning is the same. */
+  .preset[aria-checked="true"] { background: var(--control); border-color: var(--control); color: var(--control-fg); }
+  .preset[aria-checked="true"] .preset-note { color: inherit; opacity: .7; }
+  .field-label { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; font-size: 12.5px; }
+  .act-wide { grid-column: 1 / -1; }
+  .preset-note { display: block; margin-top: 1px; font-size: 10.5px; color: var(--fg-muted); }
+
+  /* ---- the info affordance ------------------------------------------------ */
+  .info {
+    flex: none; width: 15px; height: 15px; padding: 0;
+    display: inline-grid; place-items: center;
+    border: 1px solid var(--hairline-firm); border-radius: 50%;
+    background: transparent; color: var(--fg-faint);
+    font: 600 9.5px/1 var(--sans); font-style: italic;
+    cursor: help; transition: color .15s, border-color .15s, background .15s;
+  }
+  .info:hover, .info[aria-expanded="true"] { color: var(--fg); border-color: var(--fg); background: var(--hover); }
+
+  #tip {
+    position: fixed; z-index: 100; max-width: 288px; padding: 9px 11px;
+    background: var(--surface-solid); color: var(--fg);
+    border: 1px solid var(--hairline); border-radius: var(--r-md);
+    box-shadow: var(--shadow-tip);
+    font-size: 12px; line-height: 1.45; letter-spacing: -0.005em;
+    pointer-events: none; opacity: 0; transform: translateY(3px);
+    transition: opacity .13s ease, transform .13s ease;
+  }
+  #tip.is-open { opacity: 1; transform: none; }
+  #tip b { font-weight: 590; }
+  #tip > b, #tip > span { display: block; }
+  #tip em { display: block; margin-top: 5px; font-style: normal; color: var(--fg-faint); font: 400 11px/1.4 var(--figures); }
+  #tip.is-pinned { pointer-events: auto; }
+  .tip-title { margin-bottom: 4px; }
+  .tip-where { color: var(--fg-muted); font: 400 11.5px/1.5 var(--figures); font-variant-numeric: tabular-nums; }
+  .tip-quick { margin-top: 3px; }
+  .tip-detail { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--hairline);
+                color: var(--fg-muted); font-size: 11.5px; line-height: 1.45; }
+  .tip-counts + .tip-detail { margin-top: 6px; padding-top: 6px; }
+  .tip-counts { display: flex; gap: 14px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--hairline);
+                font: 400 11.5px/1.4 var(--figures); font-variant-numeric: tabular-nums; color: var(--fg-muted); }
+  .tip-counts > span { display: flex; gap: 5px; white-space: nowrap; }
+
+  /* ---- run control: one pause/play button, and a guarded restart ---------- */
+  .runbar { display: flex; align-items: center; gap: 7px; }
+  .runbar .act { flex: 1; }
+  .icon-btn {
+    flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center;
+    border: 1px solid var(--hairline-firm); border-radius: var(--r-sm);
+    background: var(--raised); color: var(--fg-muted); cursor: pointer;
+    transition: background .14s, border-color .14s, color .14s;
+  }
+  .icon-btn:hover { background: var(--hover); border-color: var(--fg-faint); color: var(--fg); }
+  .icon-btn[aria-expanded="true"] { background: var(--control); border-color: var(--control); color: var(--control-fg); }
+
+  .confirm-wrap { position: relative; }
+  .confirm {
+    position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 30; width: 252px;
+    padding: 12px 13px 11px;
+    background: var(--surface-solid); border: 1px solid var(--hairline);
+    border-radius: var(--r-md); box-shadow: var(--shadow-tip);
+  }
+  .confirm[hidden] { display: none; }
+  .confirm p { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--fg-muted); }
+  .confirm p b { display: block; margin-bottom: 3px; color: var(--fg); font-weight: 590; }
+  .confirm-row { display: flex; gap: 6px; }
+  .confirm-row button { flex: 1; padding: 6px 8px; border-radius: var(--r-sm); font-size: 12px; cursor: pointer;
+                        border: 1px solid var(--hairline-firm); background: var(--raised); }
+  .confirm-row button:hover { background: var(--hover); }
+  .confirm-go { background: var(--control) !important; border-color: var(--control) !important; color: var(--control-fg); font-weight: 500; }
+
+  /* ---- sliders ------------------------------------------------------------ */
+  .knob { margin-bottom: 13px; }
+  .knob-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .knob-label { font-size: 12.5px; color: var(--fg); }
+  .knob-value {
+    margin-left: auto; flex: none; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    font: 500 12px/1 var(--figures); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+  .knob-moved { width: 5px; height: 5px; border-radius: 50%; background: var(--control); opacity: 0; }
+  .knob.is-moved .knob-moved { opacity: 1; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    display: block; width: 100%; height: 20px; margin: 0; background: transparent; cursor: grab;
+  }
+  input[type=range]:active { cursor: grabbing; }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 999px;
+    background: linear-gradient(to right, var(--control) 0 var(--fill, 0%), var(--track) var(--fill, 0%) 100%);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 17px; height: 17px; margin-top: -6.5px; border: 0; border-radius: 50%;
+    background: #fff; box-shadow: var(--shadow-knob), 0 0 0 0.5px rgba(9,9,11,.14);
+    transition: transform .12s ease;
+  }
+    input[type=range]::-moz-range-track { height: 4px; border-radius: 999px; background: var(--track); }
+  input[type=range]::-moz-range-progress { height: 4px; border-radius: 999px; background: var(--control); }
+  input[type=range]::-moz-range-thumb {
+    width: 17px; height: 17px; border: 0; border-radius: 50%;
+    background: #fff; box-shadow: var(--shadow-knob);
+  }
+
+  /* ---- switches ----------------------------------------------------------- */
+  .toggle { display: flex; align-items: center; gap: 6px; padding: 9px 0; }
+  .toggle + .toggle { border-top: 1px solid var(--hairline); }
+  .toggle-label { font-size: 12.5px; }
+  .switch {
+    margin-left: auto; flex: none; position: relative; display: block;
+    width: 40px; height: 24px; padding: 0; border: 0; border-radius: 999px;
+    background: var(--track); cursor: pointer;
+    transition: background .22s cubic-bezier(.3,.7,.4,1);
+  }
+  .switch i {
+    position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: var(--shadow-knob);
+    transition: transform .22s cubic-bezier(.3,.7,.4,1);
+  }
+  .switch[aria-checked="true"] { background: var(--control); }
+  .switch[aria-checked="true"] i { transform: translateX(16px); }
+  .switch:focus-visible { outline-offset: 3px; border-radius: 999px; }
+
+  /* ---- buttons ------------------------------------------------------------ */
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .act, .ghost {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 8px 10px; border-radius: var(--r-sm);
+    border: 1px solid var(--hairline-firm); background: var(--raised);
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: background .14s, border-color .14s;
+  }
+  .act:hover, .ghost:hover { background: var(--hover); border-color: var(--fg-faint); }
+  .ghost { width: 100%; margin-top: 10px; color: var(--fg-muted); font-weight: 400; }
+  .act .info, .ghost .info { pointer-events: auto; }
+
+  /* ---- readouts ----------------------------------------------------------- */
+  .readout { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; }
+  .readout dt { color: var(--fg-muted); font-size: 12.5px; }
+  .readout dd, .readout dt { align-self: baseline; }
+  .readout dd { margin: 0; text-align: right; font: 400 12.5px/1.5 var(--figures); font-variant-numeric: tabular-nums; }
+
+  .gene { display: grid; grid-template-columns: 74px 1fr 46px; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .gene-label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-muted); }
+  .gene-track { height: 4px; border-radius: 999px; background: var(--recess); overflow: hidden; }
+  .gene-track + .gene-track { margin-top: 4px; }
+  .gene-fill { display: block; height: 100%; border-radius: 999px; transition: width .3s ease; }
+  .gene-fill.prey { background: var(--prey); }
+  .gene-fill.pred { background: var(--pred); }
+  .gene-figs { text-align: right; font: 400 11.5px/1.35 var(--figures); font-variant-numeric: tabular-nums; }
+  .gene-figs b { display: block; font-weight: 400; }
+  .gene-figs .prey { color: var(--prey); }
+  .gene-figs .pred { color: var(--pred); }
+
+  /* ---- the run strip ------------------------------------------------------ */
+  .timeline {
+    left: var(--gutter); bottom: var(--gutter);
+    right: calc(var(--gutter) + var(--panel-inset, 0px));
+    padding: 10px 14px 4px;
+  }
+  /* Narrow the strip enough and this row used to break "The run so far" across four
+     lines while the legend and the span collided. Each group is unbreakable, the row
+     wraps between groups, and the span drops to its own line before anything else. */
+  .timeline-top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 7px; }
+  .timeline-name { font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .run-key { display: flex; flex-wrap: wrap; gap: 4px 13px; }
+  .key-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--fg-muted); }
+  .key-swatch { width: 13px; height: 3px; border-radius: 2px; }
+  .key-prey { background: var(--prey-line); }
+  .key-pred { background: var(--pred-line); }
+  .key-mark { width: 2px; height: 10px; border-radius: 1px; background: var(--fg); opacity: .45; }
+
+  /* How much of the run to show. A segmented control, sized for figures. */
+  .run-window { display: flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--recess); }
+  .run-window button {
+    padding: 2px 8px; border: 0; border-radius: 5px; background: transparent; cursor: pointer;
+    font: 500 10.5px/1.5 var(--figures); font-variant-numeric: tabular-nums; color: var(--fg-muted);
+  }
+  .run-window button:hover { color: var(--fg); }
+  /* Wider than the strip's own domain: it will draw the same picture as the widest
+     window until the page has recorded more, so it is marked rather than left dead. */
+  .run-window button.is-short { opacity: .45; }
+  .run-window button.is-short[aria-checked="true"] { opacity: .7; }
+  .run-window button[aria-checked="true"] { background: var(--surface-solid); color: var(--fg); box-shadow: var(--shadow-knob); }
+  .timeline.is-shut .run-window { display: none; }
+
+  /* Prey, predators and the generation keep their colours wherever a figure appears,
+     including inside a tooltip: the reader should never have to ask which is which. */
+  .k-prey { color: var(--prey-line); font-weight: 500; }
+  .k-pred { color: var(--pred-line); font-weight: 500; }
+  .k-tick { color: var(--fg); font-weight: 500; }
+  .timeline.is-shut .run-key { display: none; }
+  .timeline-span { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end;
+                   gap: 3px 16px; color: var(--fg-faint);
+                   font: 400 11px/1.35 var(--figures); font-variant-numeric: tabular-nums; }
+  .timeline-span span { white-space: nowrap; }
+  .chevron { margin-left: auto; }
+  .timeline-span + .chevron { margin-left: 0; }
+  @media (max-width: 1320px) { .timeline-span { display: none; } }
+  .chevron {
+    flex: none; width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+    border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-muted); cursor: pointer;
+  }
+  .chevron:hover { background: var(--hover); }
+  .chevron svg { transition: transform .2s ease; }
+  .timeline.is-shut .chevron svg { transform: rotate(180deg); }
+  .timeline.is-shut #run, .timeline.is-shut .timeline-span { display: none; }
+  .timeline.is-shut { padding-bottom: 10px; }
+  #run { display: block; width: 100%; height: clamp(118px, 19vh, 178px); }
+
+  .waiting {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: var(--fg-muted); font-size: 13px; text-align: center;
+  }
+  .sea-note {
+    position: fixed; z-index: 9; left: var(--gutter); bottom: calc(var(--gutter) + var(--strip-h, 160px) + 10px);
+    margin: 0; max-width: 30ch; color: var(--fg-faint); font-size: 11px; pointer-events: none;
+  }
+
+  /* Below this width the sea can no longer hold the islands apart, so the page
+     becomes a scrolling column: islands first, then the panel, then the strip. The
+     routes are a spatial device and drop out; the crossing figures carry them. */
+  @media (max-width: 940px) {
+    body { overflow: auto; }
+    .sea { position: relative; display: grid; gap: 22px; padding: 14px; }
+    #routes, .sea-note { display: none; }
+    .isle { position: static; transform: none; }
+    .isle canvas { width: 100%; max-width: 460px; height: auto; }
+    .float { position: static; }
+    .deck { width: auto; margin: 0 14px 14px; }
+    .panel { width: auto; margin: 0 14px 14px; max-height: none; }
+    .panel-body { overflow: visible; }
+    .timeline { margin: 0 14px 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .01ms !important; }
+  }
