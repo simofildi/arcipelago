@@ -54,16 +54,33 @@ export function buildStart() {
   }
   paintChoice();
 
-  card.querySelector("#start-go").addEventListener("click", () => {
+  const go = card.querySelector("#start-go");
+  go.addEventListener("click", async () => {
     if (sent) return;
+    /* Three things have to happen in this order, and getting them wrong is what made
+       an earlier version look broken. The button says it heard you, because the
+       islands take a moment to notice and a control that does not move reads as dead.
+       The send is awaited, because a failure that latches `sent` would swallow every
+       later click in silence. And only then is the card dismissed — `showStart` below
+       refuses to bring it back, since the next poll still reports the old state for a
+       moment and a card that flickers back reads as a click that did not take. */
     sent = true;
-    post("/start", { generations: chosen.generations });
-    // Hidden here rather than on the next poll: the islands take a moment to notice,
-    // and a button that stays put after a click reads as one that did not work.
-    showStart(false);
+    go.disabled = true;
+    go.textContent = "Starting";
+    if (await post("/start", { generations: chosen.generations })) {
+      showStart(false);
+      return;
+    }
+    sent = false;
+    go.disabled = false;
+    go.textContent = "Start the run";
+    card.querySelector(".start-note").textContent =
+      "That did not reach the archipelago. Check the containers are still up, then try again.";
   });
 }
 
 export function showStart(show) {
-  card.hidden = !show;
+  // Never reopen after a start has been accepted: `/state` reports the run as not yet
+  // begun for a poll or two afterwards, and that is not a reason to ask again.
+  card.hidden = !(show && !sent);
 }

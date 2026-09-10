@@ -435,6 +435,7 @@
     transition: opacity .14s;
   }
   .go:hover { opacity: .88; }
+  .go:disabled { opacity: .55; cursor: default; }
 
   /* ---- buttons ------------------------------------------------------------ */
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }

@@ -33,9 +33,13 @@ export const app = {
 
 export const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+/* Fire and forget for the controls, where a dropped slider move is corrected by the
+   next one. It still resolves to whether the write landed, because one caller — the
+   start button — has no next one: it must know, or it latches on a failure. */
 export function post(path, body) {
-  fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    .catch(() => {});
+  return fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(res => res.ok)
+    .catch(() => false);
 }
 
 export function figure(n) { return Number(n).toLocaleString("en-US"); }

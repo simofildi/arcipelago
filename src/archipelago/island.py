@@ -184,6 +184,10 @@ def wait_for_start(client: redis.Redis, refresh) -> int:
             shape = "no ceiling" if MAX_TICKS <= 0 else f"{MAX_TICKS} generations"
             print(f"[{NAME}] nobody opened the interface within {VIEWER_TIMEOUT:.0f}s, "
                   f"running headless: {shape}", flush=True)
+            # Say so, or a browser arriving later is offered a start button for a run
+            # that is already several thousand generations old. `nx` because all three
+            # islands reach this at the same moment and the first one to say it wins.
+            client.set("run:go", str(MAX_TICKS), nx=True)
             return MAX_TICKS
         time.sleep(0.25)
 

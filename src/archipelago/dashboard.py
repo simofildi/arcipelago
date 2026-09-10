@@ -22,6 +22,7 @@ LINGER = int(os.environ.get("LINGER_SECONDS", "180"))
 # Whether the islands are waiting to be started from here, which changes what the
 # terminal should tell the person to do. Read from the same variable the islands use.
 ARMED = os.environ.get("START_MODE", "armed").strip().lower() != "auto"
+VIEWER_WAIT = int(float(os.environ.get("VIEWER_TIMEOUT", "180")))
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 # Deliberately short: the page loads its own HTML, its stylesheet and its ES modules,
@@ -196,6 +197,7 @@ def main() -> int:
                  "  3. Press Start",
                  "",
                  "  Nothing evolves until you do. Output is written as it runs.",
+                 f"  If nobody opens it within {VIEWER_WAIT}s the islands run on their own.",
                  rule]
     else:
         lines = [rule,
