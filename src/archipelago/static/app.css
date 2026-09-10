@@ -9,6 +9,12 @@
      predators and the blue of anything that crossed the water. Interactive chrome —
      switches, slider fills, focus rings — is graphite, never a fourth colour, so a
      slider can never be mistaken for a measurement. */
+  /* Any class that sets `display` outranks the browser's own `[hidden] { display: none }`,
+     so an element hidden in JavaScript stays on screen with its property quietly reading
+     true. That cost a start card that would not go away after the run had begun. Settle it
+     once, for everything, rather than per component. */
+  [hidden] { display: none !important; }
+
   :root {
     color-scheme: light;
 
